@@ -136,14 +136,14 @@ PHP_METHOD(XsltProcessor, xsltApplyStylesheet)
     xsltProcessor = obj->xsltProcessor;
     if (xsltProcessor != NULL) {
 
-	php_error(E_WARNING, "before xsltApplyStylesheet");
+	//php_error(E_WARNING, "before xsltApplyStylesheet");
 
 	const char * result = xsltProcessor->xsltApplyStylesheet(sourcefile, stylesheet);
-	php_error(E_WARNING, "after xsltApplyStylesheet");
+	//php_error(E_WARNING, "after xsltApplyStylesheet");
 
 	xsltProcessor->checkException();
 	if(result != NULL ) {
-	php_error(E_WARNING, result);
+	//php_error(E_WARNING, result);
    	  char *str = estrdup(result);
           RETURN_STRING(str, 0);
        } else {
