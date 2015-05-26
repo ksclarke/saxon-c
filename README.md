@@ -12,22 +12,17 @@ The other reason this repository exists is that I'd like to script the installat
 
 The idea is that you should be able to check out this repository and run the project's `./install.sh` script to compile and install the project on your machine.  Right now, the script hasn't had a great deal of testing, but it works for my particular use.  In the near future, I'll be modifying it to run on different distributions (e.g. RHEL and probably CentOS).  Right now, it's just tested on two versions of Ubuntu 14.04 (LTS) and 15.04.
 
-To check out the project:
+To check out the project and install it, type:
 
     git clone https://github.com/ksclarke/saxon-c.git
     cd saxon-c
+    ./install.sh
 
-To install:
+To uninstall the project, type:
 
-    sudo ./install.sh
+    ./install.sh clean
 
-To install a fresh version, wiping out the previous build artifacts:
-
-    sudo ./install.sh clean
-
-You will need to make sure JAVA_HOME is set to run the script.  You can also just supply on the command line:
-
-    sudo JAVA_HOME=/usr/lib/jvm/default-java ./install.sh clean
+If you're not running the script as root you will be prompted by `sudo` for a password.
 
 I think that's about it. If you test on a different Linux distro (or version) and discover issues with the build, feel free to create an issue in this project's [issue queue](https://github.com/ksclarke/saxon-c/issues).
 

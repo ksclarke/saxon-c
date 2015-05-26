@@ -25,8 +25,15 @@ fi
 JET_BIN="/tmp/jet-1050-eval-en-linux-amd64-reg.bin"
 JET_LINK="download/release/10.5/eval/linux/.*amd64-reg.bin"
 
+# Change level of output depending on what we're doing
+if [ "$1" = "clean" ]; then
+  APT_ARGS="-y -qq"
+else
+  APT_ARGS="-y"
+fi
+
 # General bootstrap stuff for Saxon/C install -- only supports JDK 7 for now
-$SUDO apt-get install -y -qq wget gcc-multilib re2c openjdk-7-jdk
+$SUDO apt-get install $APT_ARGS wget gcc-multilib re2c openjdk-7-jdk
 
 # We need to set JAVA_HOME but at this time don't want to assume we're using the default Java
 #   JAVA_HOME=$(readlink -f /usr/bin/java | sed "s:bin/java::")
