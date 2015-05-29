@@ -10,7 +10,7 @@ The other reason this repository exists is that I'd like to script the installat
 
 ### Installation
 
-The idea is that you should be able to check out this repository and run the project's `./install.sh` script to compile and install the project on your machine.  Right now, the script hasn't had a great deal of testing, but it works for my particular use.  In the near future, I'll be modifying it to run on different distributions (e.g. RHEL and probably CentOS).  Right now, it's just tested on two versions of Ubuntu 14.04 (LTS) and 15.04.
+The idea is that you should be able to check out this repository and run the project's `./install.sh` script to compile and install the project on your machine.  Right now, the script hasn't had a great deal of testing, but it works for my particular use.  So far, I've tested it with Ubuntu 15.04, 14.04 (LTS) and CentOS/RHEL 6.6.
 
 To check out the project and install it, type:
 

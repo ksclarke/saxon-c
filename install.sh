@@ -6,13 +6,13 @@
 # XSLT classes.  Saxon will resolve this issue in their next release (https://saxonica.plan.io/issues/2380), but I
 # need an immediate solution so have created this temporary fork to be used until the next official Saxon/C release.
 #
-# This script has not been tested across a lot of different platforms yet... just with Ubuntu 14.04 (LTS) and 15.04.
+# This script has not been tested across a lot of different platforms yet... just with Ubuntu 15.04, 14.04 (LTS) and
+# CentOS/RHEL 6.6.
 ##
 
-# Installation directories (a library is also installed to /usr/lib but that's a standard location)
+# Project specific installation directories
 SAXON_INSTALL_DIR="/opt/saxon-c"
 JET_INSTALL_DIR="/opt/jet10.5-eval-amd64"
-ENV_VARS="/etc/apache2/envvars"
 
 # Check if we're running as root and if not run things using sudo
 if (( $EUID != 0 )); then
@@ -21,44 +21,100 @@ else
   SUDO=''
 fi
 
+# Check which type of installer our system has and set some variables (and do some extra work) based on that
+! hash apt-get 2>/dev/null || {
+  # We're probably using an Ubuntu/Debian-based image -- for this, we just need to set some paths/variables
+  INSTALLER="apt-get"; QUIET_FLAG="-qq"
+  SYSTEM_JAVA_HOME="/usr/lib/jvm/java-7-openjdk-amd64"
+  ENV_VARS="/etc/apache2/envvars"; APACHE="apache2"
+  SAXON_INI="/etc/php5/apache2/conf.d/20-saxon.ini"
+  SYSTEM_PKGS="openjdk-7-jdk $APACHE gcc-multilib php5 php5-dev"
+
+  $SUDO apt-get update -y
+}
+! hash yum 2>/dev/null || {
+  # We're probably using a CentOS/RHEL-based image -- for this, we need to upgrade some packages + set paths
+  INSTALLER="yum"; QUIET_FLAG="-q"
+  MULTILIB="gcc gcc-c++ $(yum list 'compat-gcc-*-c++' | tail -n1 | cut -d ' ' -f 1)"
+  DEPLIBS="libX11.i686 libXext.i686 libXrender.i686 libXi.i686 libXtst.i686 libgcc.i686"
+  SYSTEM_JAVA_HOME="/usr/lib/jvm/java-1.7.0"
+  ENV_VARS="/etc/sysconfig/httpd"; APACHE="httpd"
+  SAXON_INI="/etc/php.d/saxon.ini"
+
+  # We need to use the EPEL repository to pull in some additional packages, so we install and configure that
+  $SUDO yum install -y epel-release
+  MAJOR_VERSION=$(cat /etc/redhat-release | grep -Po "\d.\d" | cut -d '.' -f 1)
+
+  # If we're using an older version of RHEL/CentOS, we need to upgrade our PHP version to 5.5
+  if [ "$MAJOR_VERSION" -lt "7" ]; then
+    $SUDO rpm -Uvh "http://mirror.webtatic.com/yum/el${MAJOR_VERSION}/latest.rpm"
+
+    # Get a list of all installed PHP packages and uninstall them before configuring the new PHP package repo
+    yum list installed | grep php | while read -r LINE; do echo $LINE | cut -d ' ' -f 1; done > /tmp/php-list.txt
+
+    if [ -s "/tmp/php-list.txt" ]; then
+      $SUDO yum remove -y $(cat /tmp/php-list.txt)
+      # Then reinstall the packages that were previously uninstalled by this script
+      $SUDO yum install -y $(cat /tmp/php-list.txt | sed -e "s|55w||" | sed -e "s|php|php55w|")
+    fi
+
+    PHP_DEVEL_VERSION="php55w php55w-devel"
+  else
+    PHP_DEVEL_VERSION="php php-devel"
+  fi
+
+  # These are the packages we'll need to install
+  SYSTEM_PKGS="--enablerepo=epel java-1.7.0-openjdk-devel $APACHE $PHP_DEVEL_VERSION $MULTILIB $DEPLIBS"
+}
+
+# Just confirm we found one of the two supported package managers
+if [ -z "$INSTALLER" ]; then
+  echo "  I didn't find 'yum' or 'apt-get' installed on this machine."
+  echo "  It seems this script doesn't yet support your system. Sorry!"
+  exit 1
+fi
+
 # Excelsior JET evaluation download information
 JET_BIN="/tmp/jet-1050-eval-en-linux-amd64-reg.bin"
 JET_LINK="download/release/10.5/eval/linux/.*amd64-reg.bin"
 
 # Change level of output depending on what we're doing
 if [ "$1" = "clean" ]; then
-  APT_ARGS="-y -qq"
+  INSTALLER_ARGS="-y $QUIET_FLAG"
 else
-  APT_ARGS="-y"
+  INSTALLER_ARGS="-y"
 fi
 
-# General bootstrap stuff for Saxon/C install -- only supports JDK 7 for now
-$SUDO apt-get install $APT_ARGS wget gcc-multilib re2c openjdk-7-jdk
+# General bootstrap stuff for Saxon/C install
+$SUDO $INSTALLER install $INSTALLER_ARGS $SYSTEM_PKGS wget re2c
 
-# We need to set JAVA_HOME but at this time don't want to assume we're using the default Java
+# We need to set JAVA_HOME but cannot yet assume we are using the default Java
 #   JAVA_HOME=$(readlink -f /usr/bin/java | sed "s:bin/java::")
 #
 # Instead, we'll hard code JDK 7 until there is JDK 8 support in Excelsior JET
-if [ -d "/usr/lib/jvm/java-7-openjdk-amd64" ]; then
-  export JAVA_HOME="/usr/lib/jvm/java-7-openjdk-amd64"
+if [ -d "$SYSTEM_JAVA_HOME" ]; then
+  export JAVA_HOME="$SYSTEM_JAVA_HOME"
 else
   echo "JAVA_HOME not set as expected. Investigate!"
   exit 1
 fi
 
 # Clean out all artifacts and system changes from previous Saxon/C builds
+SAXON_SO=$($SUDO find /usr/lib* -name "saxon.so")
 $SUDO rm -rf $SAXON_INSTALL_DIR $JET_INSTALL_DIR
-$SUDO rm -f "/usr/lib/libsaxon.so" "/usr/lib/php5/*/saxon.so" "/lib64/libjvm.so"
-$SUDO rm -f "/etc/php5/apache2/conf.d/20-saxon.ini" "/etc/ld.so.conf.d/jetvm.conf"
+$SUDO rm -f "/usr/lib/libsaxon.so" "/lib64/libjvm.so" $SAXON_SO
+$SUDO rm -f "$SAXON_INI" "/etc/ld.so.conf.d/jetvm.conf"
 $SUDO sed -i "s|export JAVA_HOME=$JAVA_HOME||" $ENV_VARS
 $SUDO sed -i "s|$JET_INSTALL_DIR/bin||" $ENV_VARS
 
+# If we've supplied the "clean" argument, we are just doing an uninstall and can stop here
 if [ "$1" = "clean" ]; then
   echo "Saxon/C has been uninstalled"
   exit 0
 fi
 
-echo "Installing a new version of Saxon/C"
+# If we didn't find the "clean" argument we are doing a new build/installation of Saxon/C
+echo "Installing Saxon/C"
 
 # Download the Excelsior JET program that's needed to compile Saxon/C into native code
 BIN=$(curl -s http://www.excelsiorjet.com/evaluate | grep -Po $JET_LINK)
@@ -76,6 +132,7 @@ fi
 $SUDO chmod 700 $JET_BIN
 $SUDO $JET_BIN -batch -dest $JET_INSTALL_DIR
 
+# Create our working directory
 $SUDO mkdir -p $SAXON_INSTALL_DIR
 $SUDO cp -r . $SAXON_INSTALL_DIR
 cd $SAXON_INSTALL_DIR
@@ -117,10 +174,10 @@ $SUDO sed -i 's/\/\/\#include \"php_saxon\.h\"/\#include \"php_saxon\.h\"/' xslt
 $SUDO phpize
 $SUDO ./configure --enable-saxon
 $SUDO make install | tee /tmp/saxon-c-install.log
-PHP_EXTENSIONS=$(grep -Po "Installing shared extensions:.*" /tmp/saxon-c-install.log | rev | cut -d " " -f1 | rev)
+PHP_EXTENSIONS=$(grep -Po "Installing shared extensions:.*" /tmp/saxon-c-install.log | rev | cut -d " " -f 1 | rev)
 
 # Create and modify the Apache config files needed for Saxon/C's PHP to run
-echo "extension=saxon.so" | $SUDO tee /etc/php5/apache2/conf.d/20-saxon.ini > /dev/null
+echo "extension=saxon.so" | $SUDO tee $SAXON_INI > /dev/null
 echo "export JAVA_HOME=$JAVA_HOME" | $SUDO tee -a $ENV_VARS > /dev/null
 
 if [ $(grep -c "^export PATH=" $ENV_VARS) = "0" ]; then
@@ -130,7 +187,7 @@ else
 fi
 
 if [ $(grep -c "^export LD_LIBRARY_PATH=" $ENV_VARS) = "0" ]; then
-  echo "export LD_LIBRARY_PATH=$PHP_EXTENSIONS:$JAVA_HOME/jre/lib:/lib64" | $SUDO tee -a $ENV_VARS > /dev/null
+  echo "export LD_LIBRARY_PATH=$PHP_EXTENSIONS:$JAVA_HOME/jre/lib:/lib64:/usr/lib" | $SUDO tee -a $ENV_VARS > /dev/null
 else
   $SUDO sed -i "s|$PHP_EXTENSIONS||" $ENV_VARS
   $SUDO sed -i "s|$JAVA_HOME/jre/lib||" $ENV_VARS
@@ -144,7 +201,7 @@ fi
 $SUDO sed -i '$!N; /^\(.*\)\n\1$/!P; D' $ENV_VARS
 
 # Restart Apache to pick up our changes
-$SUDO service apache2 restart
+if [ -z $(pidof -s $APACHE) ]; then $SUDO service $APACHE start; else $SUDO service $APACHE restart; fi
 
 #
 # Post-Install Notes:
