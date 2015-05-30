@@ -118,7 +118,7 @@ echo "Installing Saxon/C"
 
 # Download the Excelsior JET program that's needed to compile Saxon/C into native code
 BIN=$(curl -s http://www.excelsiorjet.com/evaluate | grep -Po $JET_LINK)
-wget -q -T 5 -t 1 --inet4-only -O - http://www.excelsiorjet.com/$BIN > $JET_BIN
+wget -q --inet4-only -O - http://www.excelsiorjet.com/$BIN > $JET_BIN
 
 # Confirm that we have successfully downloaded JET
 if [ -s "$JET_BIN" ]; then
