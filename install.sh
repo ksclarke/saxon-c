@@ -180,25 +180,28 @@ PHP_EXTENSIONS=$(grep -Po "Installing shared extensions:.*" /tmp/saxon-c-install
 echo "extension=saxon.so" | $SUDO tee $SAXON_INI > /dev/null
 echo "export JAVA_HOME=$JAVA_HOME" | $SUDO tee -a $ENV_VARS > /dev/null
 
-if [ $(grep -c "^export PATH=" $ENV_VARS) = "0" ]; then
-  echo "export PATH=\$PATH:$JET_INSTALL_DIR/bin" | $SUDO tee -a $ENV_VARS > /dev/null
-else
-  $SUDO sed -i "s|export PATH=|export PATH=$JET_INSTALL_DIR/bin:|" $ENV_VARS
-fi
+CONFIGS=("$ENV_VARS" "/etc/profile")
+for CONFIG in ${CONFIGS[@]}; do
+  if [ $(grep -c "^export PATH=" $CONFIG) = "0" ]; then
+    echo "export PATH=\$PATH:$JET_INSTALL_DIR/bin" | $SUDO tee -a $CONFIG > /dev/null
+  else
+    $SUDO sed -i "s|export PATH=|export PATH=$JET_INSTALL_DIR/bin:|" $CONFIG
+  fi
 
-if [ $(grep -c "^export LD_LIBRARY_PATH=" $ENV_VARS) = "0" ]; then
-  echo "export LD_LIBRARY_PATH=$PHP_EXTENSIONS:$JAVA_HOME/jre/lib:/lib64:/usr/lib" | $SUDO tee -a $ENV_VARS > /dev/null
-else
-  $SUDO sed -i "s|$PHP_EXTENSIONS||" $ENV_VARS
-  $SUDO sed -i "s|$JAVA_HOME/jre/lib||" $ENV_VARS
-  $SUDO sed -i "s|/lib64||" $ENV_VARS
-  $SUDO sed -i "s|export LD_LIBRARY_PATH=|export LD_LIBRARY_PATH=$PHP_EXTENSIONS:$JAVA_HOME/jre/lib:/lib64:|" $ENV_VARS
-  # Lastly, let's do a little cleanup of search and replace cruft
-  $SUDO sed -i "s|:\+|:|g" $ENV_VARS
-fi
+  if [ $(grep -c "^export LD_LIBRARY_PATH=" $CONFIG) = "0" ]; then
+    echo "export LD_LIBRARY_PATH=$PHP_EXTENSIONS:$JAVA_HOME/jre/lib:/lib64:/usr/lib" | $SUDO tee -a $CONFIG > /dev/null
+  else
+    $SUDO sed -i "s|$PHP_EXTENSIONS||" $CONFIG
+    $SUDO sed -i "s|$JAVA_HOME/jre/lib||" $CONFIG
+    $SUDO sed -i "s|/lib64||" $CONFIG
+    $SUDO sed -i "s|export LD_LIBRARY_PATH=|export LD_LIBRARY_PATH=$PHP_EXTENSIONS:$JAVA_HOME/jre/lib:/lib64:|" $CONFIG
+    # Lastly, let's do a little cleanup of search and replace cruft
+    $SUDO sed -i "s|:\+|:|g" $CONFIG
+  fi
 
-# Do a little formatting cleanup on the Apache config file just to keep it nice and clean
-$SUDO sed -i '$!N; /^\(.*\)\n\1$/!P; D' $ENV_VARS
+  # Do a little formatting cleanup on the config file just to keep it nice and clean
+  $SUDO sed -i '$!N; /^\(.*\)\n\1$/!P; D' $CONFIG
+done
 
 # Restart Apache to pick up our changes
 if [ -z $(pidof -s $APACHE) ]; then $SUDO service $APACHE start; else $SUDO service $APACHE restart; fi
